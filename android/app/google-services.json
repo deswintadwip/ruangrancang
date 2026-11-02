@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1084862475511",
+    "project_id": "ruangrancang-efb2b",
+    "storage_bucket": "ruangrancang-efb2b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1084862475511:android:299c56b878452e8e7bb7f2",
+        "android_client_info": {
+          "package_name": "com.example.arsitek"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpPVM0eTTOgZxGT5uwk2hUozB80KhM4Gc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
