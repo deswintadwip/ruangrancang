@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'screens/splash_screen.dart';
@@ -23,6 +24,19 @@ Future<void> main() async {
   runApp(const RuangRancangApp());
 }
 
+/// Setelan scroll global: izinkan menggulung dengan mouse & trackpad
+/// (bukan cuma roda mouse / scrollbar). Tanpa ini, di web halaman TIDAK bisa
+/// di-scroll dengan cara klik-tahan-geser pakai mouse.
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+  };
+}
+
 class RuangRancangApp extends StatelessWidget {
   const RuangRancangApp({super.key});
 
@@ -32,6 +46,7 @@ class RuangRancangApp extends StatelessWidget {
       title: 'RuangRancang',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      scrollBehavior: _AppScrollBehavior(),
       home: const SplashScreen(),
     );
   }

@@ -27,6 +27,9 @@ class Konsultasi {
   final int refundPersen;
   final int refundNominal;
   final String refundStatus; // 'tidak_ada' | 'diproses' | 'selesai'
+  final String refundBank;
+  final String refundRekening;
+  final String refundAtasNama;
   final int tahap; // 0 = belum diatur, 1-5 lihat TahapKerja
   final DateTime? updatedAt; // update progres terakhir dari arsitek
   final String? meetLink;
@@ -57,6 +60,9 @@ class Konsultasi {
     this.refundPersen = 0,
     this.refundNominal = 0,
     this.refundStatus = '',
+    this.refundBank = '',
+    this.refundRekening = '',
+    this.refundAtasNama = '',
     this.tahap = 0,
     this.updatedAt,
     this.meetLink,
@@ -91,6 +97,9 @@ class Konsultasi {
       refundPersen: (m['refundPersen'] as num?)?.toInt() ?? 0,
       refundNominal: (m['refundNominal'] as num?)?.toInt() ?? 0,
       refundStatus: m['refundStatus'] as String? ?? '',
+      refundBank: m['refundBank'] as String? ?? '',
+      refundRekening: m['refundRekening'] as String? ?? '',
+      refundAtasNama: m['refundAtasNama'] as String? ?? '',
       tahap: (m['tahap'] as num?)?.toInt() ?? 0,
       updatedAt: waktu(m['updatedAt']),
       meetLink: m['meetLink'] as String?,

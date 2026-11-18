@@ -6,6 +6,7 @@ import '../config/status.dart';
 import '../models/konsultasi.dart';
 import 'arsitek_service.dart';
 import 'notifikasi_service.dart';
+import 'status_berubah.dart';
 
 class KonsultasiService {
   KonsultasiService._();
@@ -87,11 +88,15 @@ class KonsultasiService {
   /// Kirim bukti transfer (gambar base64 yang sudah dikecilkan).
   /// Status berubah jadi menunggu_verifikasi, admin yang mengecek.
   static Future<void> kirimBukti(String id, String base64Gambar) async {
-    await _col.doc(id).update({
-      'status': StatusKonsultasi.menungguVerifikasi,
-      'buktiBayar': base64Gambar,
-      'buktiBayarAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(id),
+      dari: [StatusKonsultasi.menungguPembayaran],
+      ubah: (_) => {
+        'status': StatusKonsultasi.menungguVerifikasi,
+        'buktiBayar': base64Gambar,
+        'buktiBayarAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirimKeSaya(
       type: 'pembayaran',
       refId: id,
@@ -121,31 +126,51 @@ class KonsultasiService {
         String oleh = 'user',
         String alasan = '',
       }) async {
-    final persen = hitungRefundPersen(k, olehArsitek: oleh == 'arsitek');
-    final nominal = k.harga * persen ~/ 100;
+    var persen = 0;
+    var nominal = 0;
     final db = FirebaseFirestore.instance;
-    final batch = db.batch();
-    batch.update(_col.doc(k.id), {
-      'status': StatusKonsultasi.dibatalkan,
-      'dibatalkanOleh': oleh,
-      'dibatalkanAt': FieldValue.serverTimestamp(),
-      'alasanBatal': alasan,
-      'refundPersen': persen,
-      'refundNominal': nominal,
-      'refundStatus': nominal > 0 ? 'diproses' : 'tidak_ada',
-    });
-    batch.delete(db
-        .collection(Koleksi.jadwal)
-        .doc('${k.arsitekId}_${k.tanggal}_${k.jam}'));
-    await batch.commit();
+    // Status dibaca ulang di dalam transaksi: kalau sudah berubah
+    // (misalnya admin sudah menyetujui/membatalkan), tidak ada yang ditulis.
+    await ubahBilaStatus(
+      _col.doc(k.id),
+      dari: oleh == 'sistem'
+          ? [StatusKonsultasi.menungguPembayaran]
+          : [
+              StatusKonsultasi.menungguPembayaran,
+              StatusKonsultasi.menungguVerifikasi,
+              StatusKonsultasi.dikonfirmasi,
+            ],
+      ubah: (d) {
+        final f = Konsultasi.fromDoc(d);
+        persen = hitungRefundPersen(f, olehArsitek: oleh == 'arsitek');
+        nominal = f.harga * persen ~/ 100;
+        return {
+          'status': StatusKonsultasi.dibatalkan,
+          'dibatalkanOleh': oleh,
+          'dibatalkanAt': FieldValue.serverTimestamp(),
+          'alasanBatal': alasan,
+          'refundPersen': persen,
+          'refundNominal': nominal,
+          'refundStatus': nominal > 0 ? 'diproses' : 'tidak_ada',
+        };
+      },
+      hapus: (d) {
+        final f = Konsultasi.fromDoc(d);
+        return [
+          db
+              .collection(Koleksi.jadwal)
+              .doc('${f.arsitekId}_${f.tanggal}_${f.jam}')
+        ];
+      },
+    );
     if (nominal > 0) {
       NotifikasiService.kirim(
         userId: k.userId,
         type: 'refund',
         refId: k.id,
         judul: 'Refund diproses',
-        isi: 'Refund $persen% sedang diproses admin, '
-            'estimasi 1 sampai 3 hari kerja.',
+        isi: 'Refund $persen% sedang diproses admin. Isi rekening tujuan di '
+            'Riwayat > Dibatalkan agar dana bisa dikirim.',
       );
     } else if (oleh == 'sistem') {
       NotifikasiService.kirim(
@@ -157,6 +182,26 @@ class KonsultasiService {
             'kembali.',
       );
     }
+  }
+
+  /// User mengisi rekening tujuan refund (hanya saat refund 'diproses').
+  static Future<void> simpanRekeningRefund(
+      Konsultasi k, String bank, String rekening, String atasNama) {
+    return ubahBilaStatus(
+      _col.doc(k.id),
+      dari: [StatusKonsultasi.dibatalkan],
+      ubah: (d) {
+        if ((d.data() ?? {})['refundStatus'] != 'diproses') {
+          throw Exception('Refund ini sudah tidak bisa diubah.');
+        }
+        return {
+          'refundBank': bank,
+          'refundRekening': rekening,
+          'refundAtasNama': atasNama,
+          'refundDiisiAt': FieldValue.serverTimestamp(),
+        };
+      },
+    );
   }
 
   /// Sisa jam sebelum sesi mulai (negatif kalau sudah lewat).
@@ -268,14 +313,22 @@ class KonsultasiService {
         'userId': k.userId,
       });
       tx.set(kRef, k.toMap());
+      if (k.harga == 0) {
+        // Promo konsultasi gratis: tandai sudah terpakai (sekali per akun).
+        tx.update(db.collection(Koleksi.users).doc(k.userId),
+            {'promoKonsultasiTerpakai': true});
+      }
     });
     NotifikasiService.kirim(
       userId: k.userId,
       type: 'booking',
       refId: kRef.id,
-      judul: 'Booking dibuat',
-      isi: 'Konsultasi dengan ${k.arsitekNama} (${k.tanggal}, ${k.jam}). '
-          'Selesaikan pembayaran agar jadwalmu terkunci.',
+      judul: k.harga == 0 ? 'Konsultasi gratis dikonfirmasi' : 'Booking dibuat',
+      isi: k.harga == 0
+          ? 'Promo pengguna baru terpakai. Konsultasi dengan ${k.arsitekNama} '
+              '(${k.tanggal}, ${k.jam}) sudah dikonfirmasi.'
+          : 'Konsultasi dengan ${k.arsitekNama} (${k.tanggal}, ${k.jam}). '
+              'Selesaikan pembayaran agar jadwalmu terkunci.',
     );
     return kRef.id;
   }

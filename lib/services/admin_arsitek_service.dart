@@ -10,6 +10,7 @@ class AkunArsitek {
   final String profilId;
   final String spesialisasi;
   final bool aktif;
+  final List<String> cuti; // tanggal libur "yyyy-MM-dd" yang diambil arsitek
 
   const AkunArsitek({
     required this.uid,
@@ -17,16 +18,19 @@ class AkunArsitek {
     required this.profilId,
     required this.spesialisasi,
     required this.aktif,
+    this.cuti = const [],
   });
 
   factory AkunArsitek.fromDoc(DocumentSnapshot<Map<String, dynamic>> d) {
     final m = d.data() ?? {};
+    final nm = (m['nama'] as String?)?.trim();
     return AkunArsitek(
       uid: d.id,
-      nama: m['nama'] as String? ?? '-',
-      profilId: m['profilId'] as String? ?? '',
-      spesialisasi: m['spesialisasi'] as String? ?? '',
+      nama: (nm == null || nm.isEmpty) ? '-' : nm,
+      profilId: (m['profilId'] as String? ?? '').trim(),
+      spesialisasi: (m['spesialisasi'] as String? ?? '').trim(),
       aktif: m['isActive'] as bool? ?? true,
+      cuti: (m['cuti'] as List?)?.map((e) => e.toString()).toList() ?? const [],
     );
   }
 }

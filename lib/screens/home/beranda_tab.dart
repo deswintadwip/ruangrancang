@@ -4,15 +4,19 @@ import '../../models/proyek.dart';
 import '../../services/notifikasi_service.dart';
 import '../../services/proyek_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/header_foto.dart';
 import '../../widgets/arsitek_sections.dart';
 import '../../widgets/gambar_proyek.dart';
+import '../../widgets/scroll_pass.dart';
+import '../../services/promo_service.dart';
 import 'beranda_kontak.dart';
+import 'cari_screen.dart';
 import 'hero_banner.dart';
 import '../notifikasi/notifikasi_screen.dart';
 import 'semua_proyek_page.dart';
 
 /// Tab Beranda (dashboard user).
-class BerandaTab extends StatelessWidget {
+class BerandaTab extends StatefulWidget {
   final String nama;
 
   /// Dipanggil saat menu/tombol ingin membuka tab lain (1 = Konsultasi, dst.)
@@ -20,6 +24,11 @@ class BerandaTab extends StatelessWidget {
 
   const BerandaTab({super.key, required this.nama, required this.onOpenTab});
 
+  @override
+  State<BerandaTab> createState() => _BerandaTabState();
+}
+
+class _BerandaTabState extends State<BerandaTab> {
   /// Foto banner yang bergeser otomatis
   static const _bannerImages = [
     'lib/images/rumahdashboard1.jpg',
@@ -28,20 +37,80 @@ class BerandaTab extends StatelessWidget {
     'lib/images/rumahdashboard4.jpg',
   ];
 
+  /// Scroll halaman. Dipakai juga oleh ForwardWheel supaya roda mouse di atas
+  /// carousel/hero tetap menggulung halaman (perbaikan scroll "nyangkut" di web).
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: ListView(
+        controller: _scroll,
         padding: EdgeInsets.zero, // footer sudah punya jarak sendiri
         children: [
           _buildHeader(context),
-          HeroBanner(
-            images: _bannerImages,
-            onSearchTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Fitur pencarian segera hadir')),
+          ForwardWheel(
+            parent: _scroll,
+            child: HeroBanner(
+              images: _bannerImages,
+              onSearchTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CariScreen()),
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          StreamBuilder<bool>(
+            stream: PromoService.berhakKonsultasiGratis(),
+            builder: (context, snap) {
+              if (snap.data != true) return const SizedBox(height: 16);
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => widget.onOpenTab(1),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1D6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFD9A441)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.card_giftcard, color: Color(0xFF8A5A00), size: 30),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('PROMO PENGGUNA BARU',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.6,
+                                    color: Color(0xFF8A5A00))),
+                            SizedBox(height: 2),
+                            Text('Konsultasi pertamamu GRATIS!',
+                                style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF2B2A27))),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF8A5A00)),
+                    ]),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           _buildMenu(),
           const SizedBox(height: 20),
           const TopRekomendasi(),
@@ -58,18 +127,24 @@ class BerandaTab extends StatelessWidget {
                           fontSize: 12, color: AppColors.textMuted)),
                 ),
                 const SizedBox(height: 12),
-                ArsitekCarousel(daftar: DataArsitek.semua),
+                ForwardWheel(
+                  parent: _scroll,
+                  child: ArsitekCarousel(daftar: DataArsitek.semua),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 24),
-          PerumahanPilihan(onBuka: () => onOpenTab(3)),
+          ForwardWheel(
+            parent: _scroll,
+            child: PerumahanPilihan(onBuka: () => widget.onOpenTab(3)),
+          ),
           const SizedBox(height: 28),
           const CaraKerja(),
           const SizedBox(height: 28),
           _buildProyekHeader(context),
           const SizedBox(height: 8),
-          _buildProyekList(),
+          ForwardWheel(parent: _scroll, child: _buildProyekList()),
           const SizedBox(height: 24),
           const KontakDarurat(),
           const SizedBox(height: 28),
@@ -81,14 +156,15 @@ class BerandaTab extends StatelessWidget {
 
   // ---------- Header: logo, lonceng, inisial nama ----------
   Widget _buildHeader(BuildContext context) {
+    final nama = widget.nama;
     final initial = nama.isNotEmpty ? nama[0].toUpperCase() : '?';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
+    return HeaderFoto(child: Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
       child: Row(
         children: [
-          const Icon(Icons.home_outlined, color: AppColors.primary, size: 28),
+          const Icon(Icons.home_outlined, color: AppColors.primary, size: 38),
           const SizedBox(width: 8),
-          Text('RuangRancang', style: AppTheme.heading(20)),
+          Text('RuangRancang', style: AppTheme.heading(27)),
           const Spacer(),
           StreamBuilder<int>(
             stream: NotifikasiService.jumlahBelumDibaca(),
@@ -121,7 +197,7 @@ class BerandaTab extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 
   // ---------- 3 menu utama ----------
@@ -148,7 +224,7 @@ class BerandaTab extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => onOpenTab(tabIndex),
+          onTap: () => widget.onOpenTab(tabIndex),
           child: Container(
             height: 104,
             decoration: BoxDecoration(

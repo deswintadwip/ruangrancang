@@ -93,26 +93,26 @@ class Arsitek {
 
   /// Salinan dengan nama / spesialis dari Firestore.
   Arsitek dengan({String? nama, String? spesialis}) => Arsitek(
-        id: id,
-        nama: nama ?? this.nama,
-        gelar: gelar,
-        spesialis: spesialis ?? this.spesialis,
-        pengalamanTahun: pengalamanTahun,
-        rating: rating,
-        jumlahProyek: jumlahProyek,
-        jumlahUlasan: jumlahUlasan,
-        tentang: tentang,
-        pendidikan: pendidikan,
-        keahlian: keahlian,
-        jamPraktik: jamPraktik,
-        wa: wa,
-        warna: warna,
-        ulasan: ulasan,
-        instagram: instagram,
-        linkedin: linkedin,
-        website: website,
-        topRekomendasi: topRekomendasi,
-      );
+    id: id,
+    nama: nama ?? this.nama,
+    gelar: gelar,
+    spesialis: spesialis ?? this.spesialis,
+    pengalamanTahun: pengalamanTahun,
+    rating: rating,
+    jumlahProyek: jumlahProyek,
+    jumlahUlasan: jumlahUlasan,
+    tentang: tentang,
+    pendidikan: pendidikan,
+    keahlian: keahlian,
+    jamPraktik: jamPraktik,
+    wa: wa,
+    warna: warna,
+    ulasan: ulasan,
+    instagram: instagram,
+    linkedin: linkedin,
+    website: website,
+    topRekomendasi: topRekomendasi,
+  );
 
   /// "Ardhana Wiratama, S.Ars."
   String get namaLengkap => gelar.isEmpty ? nama : '$nama, $gelar';
@@ -177,7 +177,7 @@ class DataArsitek {
     await _langganan?.cancel();
     final pertama = Completer<void>();
     _langganan = FirebaseFirestore.instance.collection('arsitek').snapshots().listen(
-      (s) {
+          (s) {
         _terapkan(s);
         if (!pertama.isCompleted) pertama.complete();
       },
@@ -196,18 +196,23 @@ class DataArsitek {
   }
 
   static void _terapkan(QuerySnapshot<Map<String, dynamic>> s) {
+    // Cocokkan lewat profilId yang sudah "dibersihkan": spasi di depan/belakang
+    // dibuang dan huruf besar/kecil disamakan. Jadi data seperti
+    // "arsitek_06 " (ada spasi) tetap ketemu dengan profil "arsitek_06".
     final peta = <String, Map<String, dynamic>>{};
     for (final d in s.docs) {
       final m = d.data();
       final id = m['profilId'];
-      if (id is String && id.isNotEmpty) peta[id] = m;
+      if (id is String && id.trim().isNotEmpty) {
+        peta[id.trim().toLowerCase()] = m;
+      }
     }
     final hasil = <Arsitek>[];
     for (final a in _asli) {
-      final m = peta[a.id];
+      final m = peta[a.id.trim().toLowerCase()];
       if (m == null || m['isActive'] == false) continue;
-      final nama = m['nama'] as String?;
-      final spes = m['spesialisasi'] as String?;
+      final nama = (m['nama'] as String?)?.trim();
+      final spes = (m['spesialisasi'] as String?)?.trim();
       hasil.add(a.dengan(
         nama: (nama == null || nama.isEmpty) ? null : nama,
         spesialis: (spes == null || spes.isEmpty || spes == 'Belum diisi')

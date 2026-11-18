@@ -1,9 +1,11 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/app_info.dart';
 import '../../config/status.dart';
 import '../../config/tahap.dart';
 import '../../models/permintaan_vendor.dart';
+import '../../services/status_berubah.dart';
 import '../../services/vendor_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/lencana_status.dart';
@@ -19,6 +21,7 @@ class PermintaanDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -88,8 +91,10 @@ class _IsiState extends State<_Isi> {
     setState(() => _menyimpan = true);
     try {
       await VendorService.tandaiSelesai(widget.p);
-    } catch (_) {
-      _pesan('Gagal memperbarui status. Coba lagi.');
+    } catch (e) {
+      _pesan(e is StatusBerubah
+          ? e.toString()
+          : 'Gagal memperbarui status. Coba lagi.');
     }
     if (mounted) setState(() => _menyimpan = false);
   }

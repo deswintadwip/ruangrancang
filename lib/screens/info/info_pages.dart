@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../config/app_info.dart';
 import '../../theme/app_theme.dart';
@@ -20,7 +21,8 @@ class _HalamanTeks extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(judul)),
+      appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),title: Text(judul)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
@@ -200,7 +202,8 @@ class FaqPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Bantuan & FAQ')),
+      appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),title: const Text('Bantuan & FAQ')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
@@ -248,7 +251,8 @@ class TentangPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Tentang Aplikasi')),
+      appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),title: const Text('Tentang Aplikasi')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         children: [
@@ -256,11 +260,11 @@ class TentangPage extends StatelessWidget {
             child: CircleAvatar(
               radius: 40,
               backgroundColor: AppColors.primary,
-              child: Icon(Icons.home_outlined, color: Colors.white, size: 40),
+              child: Icon(Icons.home_outlined, color: Colors.white, size: 56),
             ),
           ),
           const SizedBox(height: 12),
-          Center(child: Text('RuangRancang', style: AppTheme.heading(24))),
+          Center(child: Text('RuangRancang', style: AppTheme.heading(32))),
           const Center(
             child: Text('Rancang Rumah, Wujudkan Hidup · Versi 1.0.0',
                 style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),

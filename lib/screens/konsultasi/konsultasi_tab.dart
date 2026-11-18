@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../data/arsitek_data.dart';
 import '../../theme/app_theme.dart';
@@ -57,7 +58,7 @@ class _KonsultasiTabState extends State<KonsultasiTab> {
           padding: const EdgeInsets.only(bottom: 24),
           children: [
             // ── Header ──
-            Padding(
+            HeaderFoto(child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               child: Row(
                 children: [
@@ -115,7 +116,7 @@ class _KonsultasiTabState extends State<KonsultasiTab> {
                   ),
                 ],
               ),
-            ),
+            )),
 
             // ── Pencarian ──
             Padding(

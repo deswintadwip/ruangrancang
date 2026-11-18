@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../config/tahap.dart';
 import '../../models/konsultasi.dart';
@@ -53,7 +54,7 @@ class _ArsitekKonsultasiTabState extends State<ArsitekKonsultasiTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          HeaderFoto(child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,7 +66,7 @@ class _ArsitekKonsultasiTabState extends State<ArsitekKonsultasiTab> {
                     TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
               ],
             ),
-          ),
+          )),
           const SizedBox(height: 14),
           SizedBox(
             height: 38,

@@ -1,8 +1,10 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/status.dart';
 import '../../data/arsitek_data.dart';
 import '../../models/konsultasi.dart';
+import '../../services/status_berubah.dart';
 import '../../services/konsultasi_service.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/format.dart';
@@ -40,6 +42,7 @@ class RiwayatScreen extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
           backgroundColor: AppColors.background,
           elevation: 0,
           scrolledUnderElevation: 0,
@@ -394,8 +397,11 @@ class _KartuKonsultasi extends StatelessWidget {
       if (context.mounted) {
         _segera(context, 'Konsultasi dibatalkan.');
       }
-    } catch (_) {
-      if (context.mounted) _segera(context, 'Gagal membatalkan. Coba lagi.');
+    } catch (e) {
+      if (context.mounted) {
+        _segera(context,
+            e is StatusBerubah ? e.toString() : 'Gagal membatalkan. Coba lagi.');
+      }
     }
   }
 
@@ -538,7 +544,57 @@ class _KartuKonsultasi extends StatelessWidget {
         return [
           const SizedBox(height: 12),
           _info(_teksBatal()),
+          if (k.status == StatusKonsultasi.dibatalkan &&
+              k.refundStatus == 'diproses')
+            ..._blokRekening(context),
         ];
+    }
+  }
+
+  List<Widget> _blokRekening(BuildContext context) {
+    final sudah = k.refundRekening.isNotEmpty;
+    return [
+      const SizedBox(height: 8),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF4DC),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          sudah
+              ? 'Rekening refund: ${k.refundBank} · ${k.refundRekening} '
+                  'a.n. ${k.refundAtasNama}'
+              : 'Isi rekening tujuan agar admin bisa mengirim refund-mu.',
+          style: const TextStyle(
+              fontSize: 12, height: 1.45, color: AppColors.textDark),
+        ),
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton(
+        onPressed: () => _isiRekening(context),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(44),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: Text(sudah ? 'Ubah rekening refund' : 'Isi rekening refund'),
+      ),
+    ];
+  }
+
+  Future<void> _isiRekening(BuildContext context) async {
+    final hasil = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _FormRekeningRefund(k: k),
+    );
+    if (hasil == true && context.mounted) {
+      _segera(context, 'Rekening refund tersimpan.');
     }
   }
 
@@ -585,4 +641,114 @@ class _KartuKonsultasi extends StatelessWidget {
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
+}
+
+/// Form rekening tujuan refund (bottom sheet).
+class _FormRekeningRefund extends StatefulWidget {
+  final Konsultasi k;
+  const _FormRekeningRefund({required this.k});
+
+  @override
+  State<_FormRekeningRefund> createState() => _FormRekeningRefundState();
+}
+
+class _FormRekeningRefundState extends State<_FormRekeningRefund> {
+  late final _bank = TextEditingController(text: widget.k.refundBank);
+  late final _rek = TextEditingController(text: widget.k.refundRekening);
+  late final _nama = TextEditingController(text: widget.k.refundAtasNama);
+  String? _error;
+  bool _sibuk = false;
+
+  @override
+  void dispose() {
+    _bank.dispose();
+    _rek.dispose();
+    _nama.dispose();
+    super.dispose();
+  }
+
+  Future<void> _simpan() async {
+    final bank = _bank.text.trim();
+    final rek = _rek.text.trim();
+    final nama = _nama.text.trim();
+    if (bank.length < 2 || nama.length < 3) {
+      setState(() => _error = 'Nama bank dan nama pemilik rekening wajib diisi.');
+      return;
+    }
+    if (!RegExp(r'^[0-9]{6,20}$').hasMatch(rek)) {
+      setState(() => _error = 'Nomor rekening harus angka, 6 sampai 20 digit.');
+      return;
+    }
+    setState(() {
+      _sibuk = true;
+      _error = null;
+    });
+    try {
+      await KonsultasiService.simpanRekeningRefund(widget.k, bank, rek, nama);
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _sibuk = false;
+          _error = 'Gagal menyimpan. Coba lagi.';
+        });
+      }
+    }
+  }
+
+  Widget _kolom(String label, TextEditingController c,
+          {TextInputType? tipe}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: c,
+          keyboardType: tipe,
+          decoration: InputDecoration(
+            labelText: label,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Rekening refund', style: AppTheme.heading(20)),
+            const SizedBox(height: 4),
+            const Text(
+                'Dana refund dikirim admin ke rekening ini. Pastikan datanya benar.',
+                style: TextStyle(
+                    fontSize: 12, height: 1.45, color: AppColors.textMuted)),
+            const SizedBox(height: 16),
+            _kolom('Nama bank / e-wallet', _bank),
+            _kolom('Nomor rekening', _rek, tipe: TextInputType.number),
+            _kolom('Atas nama', _nama),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(_error!,
+                    style: const TextStyle(fontSize: 12, color: Colors.red)),
+              ),
+            FilledButton(
+              onPressed: _sibuk ? null : _simpan,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text(_sibuk ? 'Menyimpan...' : 'Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

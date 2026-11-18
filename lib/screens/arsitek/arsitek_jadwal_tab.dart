@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../config/tahap.dart';
 import '../../models/ketersediaan.dart';
@@ -105,7 +106,11 @@ class _ArsitekJadwalTabState extends State<ArsitekJadwalTab> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             children: [
-              Text('Ketersediaan', style: AppTheme.heading(24)),
+              HeaderFoto(
+                  bulat: true,
+                  child: SizedBox(
+                      width: double.infinity,
+                      child: Text('Ketersediaan', style: AppTheme.heading(28)))),
               const SizedBox(height: 2),
               const Text('Atur kapan klien bisa memesan sesi denganmu',
                   style: TextStyle(

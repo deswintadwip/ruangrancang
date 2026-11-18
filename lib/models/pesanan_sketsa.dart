@@ -54,6 +54,13 @@ class PesananSketsa {
   final int hasilBagian;
   final DateTime? hasilAt;
 
+  // Revisi & permintaan data
+  final bool butuhData; // arsitek minta klien melengkapi data
+  final String alasanMinta;
+  final String dataPerbaikan;
+  final int revisiDipakai; // 0 atau 1 (jatah revisi gratis: 1x)
+  final String alasanRevisi;
+
   const PesananSketsa({
     required this.id,
     required this.userId,
@@ -93,6 +100,11 @@ class PesananSketsa {
     this.hasilUkuran = 0,
     this.hasilBagian = 0,
     this.hasilAt,
+    this.butuhData = false,
+    this.alasanMinta = '',
+    this.dataPerbaikan = '',
+    this.revisiDipakai = 0,
+    this.alasanRevisi = '',
   });
 
   bool get adaHasil => hasilBagian > 0;
@@ -142,6 +154,11 @@ class PesananSketsa {
       hasilUkuran: n('hasilUkuran'),
       hasilBagian: n('hasilBagian'),
       hasilAt: _w(m['hasilAt']),
+      butuhData: m['butuhData'] == true,
+      alasanMinta: s('alasanMinta'),
+      dataPerbaikan: s('dataPerbaikan'),
+      revisiDipakai: n('revisiDipakai'),
+      alasanRevisi: s('alasanRevisi'),
     );
   }
 }

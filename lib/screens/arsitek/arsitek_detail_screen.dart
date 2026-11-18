@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/status.dart';
@@ -24,6 +25,7 @@ class ArsitekDetailScreen extends StatelessWidget {
         final k = snap.data;
         return Scaffold(
           appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
             title: const Text('Detail Konsultasi'),
             backgroundColor: AppColors.background,
           ),

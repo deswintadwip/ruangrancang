@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../models/notifikasi.dart';
 import '../../services/konsultasi_service.dart';
@@ -189,6 +190,7 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,

@@ -1,3 +1,5 @@
+import '../../services/promo_service.dart';
+import '../../widgets/header_foto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../config/status.dart';
@@ -63,6 +65,7 @@ class _BookingScreenState extends State<BookingScreen> {
   bool _mengirim = false;
 
   Pengaturan _p = Pengaturan.bawaan;
+  bool _gratis = false; // promo konsultasi pertama gratis
   Ketersediaan? _kt; // jadwal yang diatur arsitek
   String _namaUser = '';
 
@@ -82,8 +85,10 @@ class _BookingScreenState extends State<BookingScreen> {
     final p = await PengaturanService.ambil();
     final kt = await KetersediaanService.untuk(widget.arsitek.id, p);
     final profil = await AuthService().getUserProfile();
+    final gratis = await PromoService.berhakKonsultasiGratis().first;
     if (!mounted) return;
     setState(() {
+      _gratis = gratis;
       _p = p;
       _kt = kt;
       _namaUser = (profil?['nama'] as String?) ?? '';
@@ -160,13 +165,16 @@ class _BookingScreenState extends State<BookingScreen> {
       jam: _jamMulai,
       jamSelesai: _jamSelesai,
       metode: _metode,
-      harga: _p.hargaKonsultasi,
-      status: StatusKonsultasi.menungguPembayaran,
+      harga: _gratis ? 0 : _p.hargaKonsultasi,
+      status: _gratis
+          ? StatusKonsultasi.dikonfirmasi
+          : StatusKonsultasi.menungguPembayaran,
       luas: _luas.text.trim(),
       budget: _budget.text.trim(),
       gaya: _gaya,
       catatan: _catatan.text.trim(),
-      batasBayar: DateTime.now().add(Duration(hours: _p.batasBayarJam)),
+      batasBayar:
+          _gratis ? null : DateTime.now().add(Duration(hours: _p.batasBayarJam)),
     );
     try {
       await KonsultasiService.buatBooking(k);
@@ -176,8 +184,9 @@ class _BookingScreenState extends State<BookingScreen> {
       nav.popUntil((r) => r.isFirst);
       nav.push(MaterialPageRoute(builder: (_) => const RiwayatScreen()));
       messenger.showSnackBar(SnackBar(
-        content: Text(
-            'Booking dibuat. Selesaikan pembayaran dalam ${_p.batasBayarJam} jam.'),
+        content: Text(_gratis
+            ? 'Booking dikonfirmasi! Konsultasi pertamamu gratis.'
+            : 'Booking dibuat. Selesaikan pembayaran dalam ${_p.batasBayarJam} jam.'),
       ));
     } on JadwalTerisi {
       if (!mounted) return;
@@ -205,6 +214,7 @@ class _BookingScreenState extends State<BookingScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
           backgroundColor: AppColors.background,
           elevation: 0,
           scrolledUnderElevation: 0,
@@ -332,7 +342,9 @@ class _BookingScreenState extends State<BookingScreen> {
     final terakhir = _langkah == 2;
     final aktif = !_mengirim && (!terakhir || _setuju);
     final label = terakhir
-        ? 'Bayar Sekarang · ${formatRupiah(_p.hargaKonsultasi)}'
+        ? (_gratis
+            ? 'Konfirmasi Booking · GRATIS'
+            : 'Bayar Sekarang · ${formatRupiah(_p.hargaKonsultasi)}')
         : (_langkah == 0 ? 'Lanjut ke Detail Proyek' : 'Lanjut ke Review');
     return Container(
       padding: EdgeInsets.fromLTRB(
@@ -662,7 +674,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
   List<Widget> _langkahReview() {
     final t = _tanggal!;
-    final harga = formatRupiah(_p.hargaKonsultasi);
+    final harga = _gratis ? 'GRATIS' : formatRupiah(_p.hargaKonsultasi);
     return [
       const SizedBox(height: 20),
       _kotakRingkas([

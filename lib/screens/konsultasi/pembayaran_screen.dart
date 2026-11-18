@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -9,6 +10,7 @@ import '../../config/status.dart';
 import '../../data/arsitek_data.dart';
 import '../../models/konsultasi.dart';
 import '../../models/pengaturan.dart';
+import '../../services/status_berubah.dart';
 import '../../services/konsultasi_service.dart';
 import '../../services/pengaturan_service.dart';
 import '../../theme/app_theme.dart';
@@ -89,10 +91,12 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
         _bukti = null;
       });
       _pesan('Bukti terkirim. Admin akan memverifikasi.');
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() => _mengirim = false);
-      _pesan('Gagal mengirim bukti. Coba lagi.');
+      _pesan(e is StatusBerubah
+          ? e.toString()
+          : 'Gagal mengirim bukti. Mungkin batas waktu bayar sudah lewat.');
     }
   }
 
@@ -123,8 +127,8 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
       if (!mounted) return;
       Navigator.pop(context);
       _pesan('Pesanan dibatalkan.');
-    } catch (_) {
-      _pesan('Gagal membatalkan. Coba lagi.');
+    } catch (e) {
+      _pesan(e is StatusBerubah ? e.toString() : 'Gagal membatalkan. Coba lagi.');
     }
   }
 
@@ -133,6 +137,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,

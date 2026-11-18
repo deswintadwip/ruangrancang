@@ -148,20 +148,13 @@ class _BarSketsaUser extends StatelessWidget {
   const _BarSketsaUser();
 
   PesananSketsa? _pilih(List<PesananSketsa> semua) {
-    final sekarang = DateTime.now();
     for (final p in semua) {
       if (p.status == StatusSketsa.menungguPembayaran ||
           p.status == StatusSketsa.menungguVerifikasi ||
           p.status == StatusSketsa.dikerjakan) {
         return p;
       }
-      // Hasil yang baru jadi tetap ditampilkan 3 hari
-      if (p.status == StatusSketsa.selesai &&
-          p.adaHasil &&
-          p.hasilAt != null &&
-          sekarang.difference(p.hasilAt!).inDays < 3) {
-        return p;
-      }
+      // Yang sudah selesai tidak ditampilkan lagi (ada di Pesanan Sketsa).
     }
     return null;
   }
@@ -192,10 +185,7 @@ class _BarSketsaUser extends StatelessWidget {
             tombol = 'Lacak';
             tahap = 3;
           default:
-            judul = 'Sketsa sudah jadi';
-            sub = 'Ketuk untuk membuka dan mengunduh PDF';
-            tombol = 'Buka';
-            tahap = 4;
+            return const SizedBox.shrink();
         }
         return _BarDasar(
           inisial: inisialNama(p.arsitekNama),
@@ -261,7 +251,9 @@ class _BarKonsultasiUser extends StatelessWidget {
 
   Konsultasi? _pilih(List<Konsultasi> semua) {
     final aktif = semua
-        .where((k) => k.status == StatusKonsultasi.dikonfirmasi)
+        .where((k) =>
+            k.status == StatusKonsultasi.dikonfirmasi &&
+            k.tahapSaatIni < TahapKerja.jumlah)
         .toList();
     if (aktif.isEmpty) return null;
     // Yang sudah dikerjakan arsitek lebih dulu, lalu sesi terdekat.

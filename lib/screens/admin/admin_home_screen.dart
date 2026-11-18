@@ -218,9 +218,35 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget _tombolNotifikasi() {
     return IconButton(
       tooltip: 'Notifikasi',
-      onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Notifikasi admin segera hadir (Anggota 5)')),
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: AppColors.surface,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (sheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Notifikasi', style: AppTheme.heading(20)),
+                const SizedBox(height: 4),
+                const Text('Hal yang menunggu tindakanmu.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                const SizedBox(height: 12),
+                PerluTindakan(
+                  denganJudul: false,
+                  onTap: (kunci) {
+                    Navigator.pop(sheet);
+                    _bukaKunci(kunci);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
       icon: const Icon(Icons.notifications_none, color: AppColors.primary),
     );

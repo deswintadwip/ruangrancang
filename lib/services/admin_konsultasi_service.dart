@@ -3,6 +3,7 @@ import '../config/status.dart';
 import '../models/konsultasi.dart';
 import 'notifikasi_service.dart';
 import 'pengaturan_service.dart';
+import 'status_berubah.dart';
 
 /// Aksi admin untuk konsultasi: verifikasi pembayaran, tolak, batalkan, refund.
 /// Dijaga oleh Rules (admin boleh mengubah semua field konsultasi).
@@ -51,13 +52,17 @@ class AdminKonsultasiService {
 
   /// Bukti valid -> dikonfirmasi. User dan arsitek diberi tahu.
   static Future<void> setujui(Konsultasi k) async {
-    await _col.doc(k.id).update({
-      'status': StatusKonsultasi.dikonfirmasi,
-      'alasanTolak': FieldValue.delete(),
-      'diverifikasiAt': FieldValue.serverTimestamp(),
-      'tahap': 1,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(k.id),
+      dari: [StatusKonsultasi.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusKonsultasi.dikonfirmasi,
+        'alasanTolak': FieldValue.delete(),
+        'diverifikasiAt': FieldValue.serverTimestamp(),
+        'tahap': 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: k.userId,
       type: 'pembayaran',
@@ -77,12 +82,16 @@ class AdminKonsultasiService {
   static Future<void> mintaUnggahUlang(Konsultasi k, String alasan) async {
     final p = await PengaturanService.ambil();
     final batas = DateTime.now().add(Duration(hours: p.batasBayarJam));
-    await _col.doc(k.id).update({
-      'status': StatusKonsultasi.menungguPembayaran,
-      'alasanTolak': alasan,
-      'buktiBayar': FieldValue.delete(),
-      'batasBayar': Timestamp.fromDate(batas),
-    });
+    await ubahBilaStatus(
+      _col.doc(k.id),
+      dari: [StatusKonsultasi.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusKonsultasi.menungguPembayaran,
+        'alasanTolak': alasan,
+        'buktiBayar': FieldValue.delete(),
+        'batasBayar': Timestamp.fromDate(batas),
+      },
+    );
     NotifikasiService.kirim(
       userId: k.userId,
       type: 'pembayaran',
@@ -94,14 +103,16 @@ class AdminKonsultasiService {
 
   /// Tolak permanen: status ditolak dan slot jadwal dilepas.
   static Future<void> tolakPermanen(Konsultasi k, String alasan) async {
-    final batch = _db.batch();
-    batch.update(_col.doc(k.id), {
-      'status': StatusKonsultasi.ditolak,
-      'alasanTolak': alasan,
-      'diverifikasiAt': FieldValue.serverTimestamp(),
-    });
-    batch.delete(_slot(k));
-    await batch.commit();
+    await ubahBilaStatus(
+      _col.doc(k.id),
+      dari: [StatusKonsultasi.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusKonsultasi.ditolak,
+        'alasanTolak': alasan,
+        'diverifikasiAt': FieldValue.serverTimestamp(),
+      },
+      hapus: (_) => [_slot(k)],
+    );
     NotifikasiService.kirim(
       userId: k.userId,
       type: 'batal',
@@ -118,27 +129,39 @@ class AdminKonsultasiService {
 
   /// Admin membatalkan konsultasi aktif. Slot dilepas, refund dicatat.
   static Future<void> batalkan(Konsultasi k, String alasan) async {
-    final persen = persenRefundAdmin(k);
-    final nominal = k.harga * persen ~/ 100;
-    final batch = _db.batch();
-    batch.update(_col.doc(k.id), {
-      'status': StatusKonsultasi.dibatalkan,
-      'dibatalkanOleh': 'admin',
-      'dibatalkanAt': FieldValue.serverTimestamp(),
-      'alasanBatal': alasan,
-      'refundPersen': persen,
-      'refundNominal': nominal,
-      'refundStatus': nominal > 0 ? 'diproses' : 'tidak_ada',
-    });
-    batch.delete(_slot(k));
-    await batch.commit();
+    var persen = 0;
+    var nominal = 0;
+    await ubahBilaStatus(
+      _col.doc(k.id),
+      dari: [
+        StatusKonsultasi.menungguPembayaran,
+        StatusKonsultasi.menungguVerifikasi,
+        StatusKonsultasi.dikonfirmasi,
+      ],
+      ubah: (d) {
+        final f = Konsultasi.fromDoc(d);
+        persen = persenRefundAdmin(f);
+        nominal = f.harga * persen ~/ 100;
+        return {
+          'status': StatusKonsultasi.dibatalkan,
+          'dibatalkanOleh': 'admin',
+          'dibatalkanAt': FieldValue.serverTimestamp(),
+          'alasanBatal': alasan,
+          'refundPersen': persen,
+          'refundNominal': nominal,
+          'refundStatus': nominal > 0 ? 'diproses' : 'tidak_ada',
+        };
+      },
+      hapus: (_) => [_slot(k)],
+    );
     NotifikasiService.kirim(
       userId: k.userId,
       type: nominal > 0 ? 'refund' : 'batal',
       refId: k.id,
       judul: 'Konsultasi dibatalkan admin',
       isi: nominal > 0
-          ? '$alasan. Refund $persen% sedang diproses, estimasi 1 sampai 3 hari kerja.'
+          ? '$alasan. Refund $persen% sedang diproses. Isi rekening tujuan di '
+              'Riwayat > Dibatalkan agar dana bisa dikirim.'
           : alasan,
     );
     await _notifArsitek(k,
@@ -149,11 +172,24 @@ class AdminKonsultasiService {
 
   /// Dana sudah dikembalikan ke user.
   static Future<void> tandaiRefundSelesai(Konsultasi k, String catatan) async {
-    await _col.doc(k.id).update({
-      'refundStatus': 'selesai',
-      'refundSelesaiAt': FieldValue.serverTimestamp(),
-      'catatanRefund': catatan,
-    });
+    await ubahBilaStatus(
+      _col.doc(k.id),
+      dari: [StatusKonsultasi.dibatalkan],
+      ubah: (d) {
+        final m = d.data() ?? {};
+        if (m['refundStatus'] != 'diproses') {
+          throw Exception('Refund ini sudah selesai atau tidak diperlukan.');
+        }
+        if (((m['refundRekening'] as String?) ?? '').isEmpty) {
+          throw Exception('User belum mengisi rekening refund.');
+        }
+        return {
+          'refundStatus': 'selesai',
+          'refundSelesaiAt': FieldValue.serverTimestamp(),
+          'catatanRefund': catatan,
+        };
+      },
+    );
     NotifikasiService.kirim(
       userId: k.userId,
       type: 'refund',

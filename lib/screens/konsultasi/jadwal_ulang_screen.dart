@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../models/konsultasi.dart';
 import '../../models/pengaturan.dart';
@@ -112,6 +113,7 @@ class _JadwalUlangScreenState extends State<JadwalUlangScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,

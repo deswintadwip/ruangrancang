@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../config/status.dart';
@@ -136,6 +137,7 @@ class _AdminPermintaanVendorDetailState
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,

@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/status.dart';
@@ -26,6 +27,7 @@ class LacakScreen extends StatelessWidget {
         return Scaffold(
           backgroundColor: AppColors.background,
           appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
             title: const Text('Lacak Konsultasi'),
             backgroundColor: AppColors.background,
           ),

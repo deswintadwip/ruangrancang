@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -109,13 +110,48 @@ class _SketsaDetailScreenState extends State<SketsaDetailScreen> {
 
   Future<void> _unduh(PesananSketsa p) async {
     if (!kIsWeb) {
-      return _pesan('Pengunduhan saat ini tersedia lewat versi web.');
+      return _pesan('Unduh PDF saat ini hanya di versi web (buka lewat Chrome). Di HP menyusul.');
     }
     await _jalankan(() async {
       final bytes = await PesananSketsaService.ambilHasil(p);
       final nama = p.hasilNama.isEmpty ? 'sketsa.pdf' : p.hasilNama;
       await XFile.fromData(bytes, mimeType: 'application/pdf', name: nama).saveTo(nama);
     }, sukses: 'File sketsa diunduh.');
+  }
+
+  // ───────────── revisi & data ─────────────
+
+  Future<void> _ajukanRevisi(PesananSketsa p) async {
+    final alasan = await tanyaAlasan(context,
+        judul: 'Ajukan revisi',
+        petunjuk: 'Tulis bagian yang ingin direvisi. Jatah revisi hanya 1 kali.',
+        tombol: 'Kirim revisi',
+        warnaTombol: AppColors.primary);
+    if (alasan == null) return;
+    await _jalankan(() => PesananSketsaService.mintaRevisi(p, alasan),
+        sukses: 'Revisi dikirim ke arsitek.');
+  }
+
+  Future<void> _kirimPerbaikan(PesananSketsa p) async {
+    final teks = await tanyaAlasan(context,
+        judul: 'Lengkapi data',
+        petunjuk: 'Tulis data yang diminta arsitek (mis. luas lahan yang benar).',
+        tombol: 'Kirim',
+        warnaTombol: AppColors.primary);
+    if (teks == null) return;
+    await _jalankan(() => PesananSketsaService.kirimPerbaikanData(p, teks),
+        sukses: 'Data terkirim ke arsitek.');
+  }
+
+  Future<void> _mintaData(PesananSketsa p) async {
+    final alasan = await tanyaAlasan(context,
+        judul: 'Minta data diperbaiki',
+        petunjuk: 'Jelaskan data yang tidak masuk akal atau kurang. Klien akan diberi tahu.',
+        tombol: 'Kirim permintaan',
+        warnaTombol: AppColors.primary);
+    if (alasan == null) return;
+    await _jalankan(() => PesananSketsaService.mintaDataDiperbaiki(p, alasan),
+        sukses: 'Permintaan dikirim ke klien.');
   }
 
   // ───────────── aksi arsitek ─────────────
@@ -129,6 +165,12 @@ class _SketsaDetailScreenState extends State<SketsaDetailScreen> {
       final b = await f.readAsBytes();
       if (b.length > PesananSketsaService.batasUkuranHasil) {
         return _pesan('Ukuran PDF maksimal 3 MB.');
+      }
+      // Pastikan benar-benar PDF (awal file harus "%PDF"), bukan file
+      // lain yang hanya diganti ekstensinya.
+      if (b.length < 5 ||
+          b[0] != 0x25 || b[1] != 0x50 || b[2] != 0x44 || b[3] != 0x46) {
+        return _pesan('File ini bukan PDF yang valid. Pilih file PDF asli.');
       }
       setState(() {
         _pdf = b;
@@ -186,6 +228,7 @@ class _SketsaDetailScreenState extends State<SketsaDetailScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -381,6 +424,83 @@ class _SketsaDetailScreenState extends State<SketsaDetailScreen> {
           ),
         ),
       ])));
+    }
+
+    // ── Permintaan data & revisi ──
+    if (p.status == StatusSketsa.dikerjakan) {
+      if (p.revisiDipakai > 0 && p.alasanRevisi.isNotEmpty) {
+        w.add(_kotak(
+            Text('Permintaan revisi dari klien:\n${p.alasanRevisi}',
+                style: const TextStyle(fontSize: 12.5, height: 1.5)),
+            warna: const Color(0xFFF7EBD2)));
+      }
+      if (p.dataPerbaikan.isNotEmpty && _role != 'admin') {
+        w.add(_kotak(
+            Text('Data tambahan dari klien:\n${p.dataPerbaikan}',
+                style: const TextStyle(fontSize: 12.5, height: 1.5)),
+            warna: AppColors.sageMuda));
+      }
+      if (p.butuhData) {
+        w.add(_kotak(
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                  _role == 'user'
+                      ? '${p.arsitekNama} meminta datamu dilengkapi:'
+                      : 'Menunggu klien melengkapi data:',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(p.alasanMinta, style: const TextStyle(fontSize: 12.5, height: 1.5)),
+              if (_role == 'user') ...[
+                const SizedBox(height: 10),
+                FilledButton(
+                  onPressed: _sibuk ? null : () => _kirimPerbaikan(p),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    minimumSize: const Size.fromHeight(44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Kirim data perbaikan'),
+                ),
+              ],
+            ]),
+            warna: const Color(0xFFF7EBD2)));
+      } else if (_role == 'arsitek') {
+        w.add(OutlinedButton(
+          onPressed: _sibuk ? null : () => _mintaData(p),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            minimumSize: const Size.fromHeight(44),
+            side: const BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Minta data diperbaiki'),
+        ));
+      }
+    }
+    if (_role == 'user' && p.status == StatusSketsa.selesai) {
+      w.add(_kotak(
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+                p.revisiDipakai == 0
+                    ? 'Kamu punya 1 kali revisi gratis. Revisi hanya untuk perubahan '
+                        'di dalam data yang sudah kamu isi, bukan permintaan baru. '
+                        'Tidak ada refund setelah sketsa dikerjakan.'
+                    : 'Jatah revisi sudah terpakai. Tidak ada refund setelah sketsa dikerjakan.',
+                style: const TextStyle(fontSize: 12.5, height: 1.5)),
+            if (p.revisiDipakai == 0) ...[
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: _sibuk ? null : () => _ajukanRevisi(p),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  minimumSize: const Size.fromHeight(44),
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Ajukan revisi (1x gratis)'),
+              ),
+            ],
+          ])));
     }
 
     if (p.adaHasil) {

@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../models/proyek.dart';
 import '../../services/proyek_service.dart';
@@ -11,7 +12,8 @@ class SemuaProyekPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Proyek Kami')),
+      appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),title: const Text('Proyek Kami')),
       body: StreamBuilder<List<Proyek>>(
         stream: ProyekService.streamTampil(),
         builder: (context, snap) {

@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../config/status.dart';
@@ -126,6 +127,7 @@ class _AdminKonsultasiDetailPageState extends State<AdminKonsultasiDetailPage> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -288,10 +290,25 @@ class _AdminKonsultasiDetailPageState extends State<AdminKonsultasiDetailPage> {
                   barisInfo('Alasan', alasanTolak.isEmpty ? '-' : alasanTolak),
                 if (k.status == StatusKonsultasi.dibatalkan && k.refundStatus == 'diproses') ...[
                   const SizedBox(height: 8),
-                  const Text(
-                      'Transfer refund ke klien, lalu tandai selesai.',
-                      style: TextStyle(fontSize: 12, height: 1.5, color: AppColors.textMuted)),
-                  _tombol('Tandai refund selesai', () => _refundSelesai(k), utama: true),
+                  if (k.refundRekening.isEmpty)
+                    const Text(
+                        'Klien belum mengisi rekening refund. Tunggu klien mengisinya di aplikasi.',
+                        style: TextStyle(fontSize: 12, height: 1.5, color: Colors.red))
+                  else ...[
+                    barisInfo('Bank', k.refundBank),
+                    barisInfo('No. rekening', k.refundRekening, tebal: true),
+                    barisInfo('Atas nama', k.refundAtasNama),
+                    const Text(
+                        'Transfer refund ke rekening di atas, lalu tandai selesai.',
+                        style: TextStyle(fontSize: 12, height: 1.5, color: AppColors.textMuted)),
+                  ],
+                  Opacity(
+                    opacity: k.refundRekening.isEmpty ? 0.4 : 1,
+                    child: _tombol(
+                        'Tandai refund selesai',
+                        k.refundRekening.isEmpty ? null : () => _refundSelesai(k),
+                        utama: true),
+                  ),
                 ],
               ],
             ),

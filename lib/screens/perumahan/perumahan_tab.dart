@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../data/perumahan_data.dart';
 import '../../theme/app_theme.dart';
@@ -38,7 +39,7 @@ class _PerumahanTabState extends State<PerumahanTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
+          HeaderFoto(child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 12, 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,7 +71,7 @@ class _PerumahanTabState extends State<PerumahanTab> {
                 ),
               ],
             ),
-          ),
+          )),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
             child: TextField(

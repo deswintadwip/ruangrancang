@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -9,6 +10,7 @@ import '../models/pesanan_sketsa.dart';
 import 'arsitek_service.dart';
 import 'notifikasi_service.dart';
 import 'pengaturan_service.dart';
+import 'status_berubah.dart';
 
 /// Semua aksi pesanan sketsa: user (pesan & bayar), arsitek (kirim hasil
 /// PDF), dan admin (verifikasi pembayaran).
@@ -51,6 +53,20 @@ class PesananSketsaService {
     required Map<String, dynamic> isi,
   }) async {
     final uid = FirebaseAuth.instance.currentUser!.uid;
+    // Cegah pesanan dobel: masih ada pesanan ke arsitek yang sama yang
+    // belum dibayar / sedang diverifikasi.
+    final lama = await _col.where('userId', isEqualTo: uid).get();
+    final dobel = lama.docs.any((d) {
+      final m = d.data();
+      return m['arsitekId'] == arsitekId &&
+          (m['status'] == StatusSketsa.menungguPembayaran ||
+              m['status'] == StatusSketsa.menungguVerifikasi);
+    });
+    if (dobel) {
+      throw Exception('Kamu masih punya pesanan sketsa ke arsitek ini yang '
+          'belum selesai dibayar. Selesaikan atau batalkan dulu di '
+          '"Pesanan Sketsa".');
+    }
     final p = await PengaturanService.ambil();
     final batas = DateTime.now().add(Duration(hours: p.batasBayarJam));
     final ref = await _col.add({
@@ -76,11 +92,15 @@ class PesananSketsaService {
   }
 
   static Future<void> kirimBukti(PesananSketsa p, String base64Gambar) async {
-    await _col.doc(p.id).update({
-      'status': StatusSketsa.menungguVerifikasi,
-      'buktiBayar': base64Gambar,
-      'buktiBayarAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.menungguPembayaran],
+      ubah: (_) => {
+        'status': StatusSketsa.menungguVerifikasi,
+        'buktiBayar': base64Gambar,
+        'buktiBayarAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'sketsa',
@@ -93,12 +113,18 @@ class PesananSketsaService {
 
   static Future<void> batalkan(PesananSketsa p,
       {String oleh = 'user', String alasan = 'Dibatalkan sebelum pembayaran'}) {
-    return _col.doc(p.id).update({
-      'status': StatusSketsa.dibatalkan,
-      'dibatalkanOleh': oleh,
-      'alasanBatal': alasan,
-      'dibatalkanAt': FieldValue.serverTimestamp(),
-    });
+    return ubahBilaStatus(
+      _col.doc(p.id),
+      dari: oleh == 'sistem'
+          ? [StatusSketsa.menungguPembayaran]
+          : [StatusSketsa.menungguPembayaran, StatusSketsa.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusSketsa.dibatalkan,
+        'dibatalkanOleh': oleh,
+        'alasanBatal': alasan,
+        'dibatalkanAt': FieldValue.serverTimestamp(),
+      },
+    );
   }
 
   static void _batalkanYangKedaluwarsa(List<PesananSketsa> list) {
@@ -120,20 +146,47 @@ class PesananSketsaService {
   /// (hanya yang sudah dibayar: dikerjakan / selesai).
   static Stream<List<PesananSketsa>> untukSaya() async* {
     final ids = await ArsitekService.idSaya();
-    if (ids.isEmpty) {
-      yield const [];
-      return;
-    }
-    yield* _col.where('arsitekId', whereIn: ids).snapshots().map((s) {
-      final list = s.docs
-          .map(PesananSketsa.fromDoc)
+    yield* _untukArsitek(ids);
+  }
+
+  // Satu query per ID (UID dan profilId), digabung. Query terpisah dipilih
+  // supaya Firestore Rules gampang membuktikan akses tiap query.
+  static Stream<List<PesananSketsa>> _untukArsitek(List<String> ids) {
+    final controller = StreamController<List<PesananSketsa>>();
+    final hasil = <String, List<PesananSketsa>>{};
+    final langganan =
+        <StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>[];
+
+    void kirim() {
+      final semua = hasil.values
+          .expand((e) => e)
           .where((p) =>
               p.status == StatusSketsa.dikerjakan ||
               p.status == StatusSketsa.selesai)
           .toList()
         ..sort(_urut);
-      return list;
-    });
+      if (!controller.isClosed) controller.add(semua);
+    }
+
+    if (ids.isEmpty) controller.add(const []);
+    for (final id in ids) {
+      langganan.add(_col.where('arsitekId', isEqualTo: id).snapshots().listen(
+        (snap) {
+          hasil[id] = snap.docs.map(PesananSketsa.fromDoc).toList();
+          kirim();
+        },
+        onError: (_) {
+          hasil[id] = const [];
+          kirim();
+        },
+      ));
+    }
+    controller.onCancel = () {
+      for (final l in langganan) {
+        l.cancel();
+      }
+    };
+    return controller.stream;
   }
 
   /// Kirim hasil sketsa (PDF). Dipecah supaya muat di batas dokumen Firestore.
@@ -148,19 +201,22 @@ class PesananSketsaService {
       bagian.add(b64.substring(i, min(i + _panjangBagian, b64.length)));
     }
     final sub = _col.doc(p.id).collection('hasil');
-    final batch = FirebaseFirestore.instance.batch();
-    for (var i = 0; i < bagian.length; i++) {
-      batch.set(sub.doc(i.toString().padLeft(3, '0')),
-          {'urutan': i, 'data': bagian[i]});
-    }
-    batch.update(_col.doc(p.id), {
-      'status': StatusSketsa.selesai,
-      'hasilNama': nama,
-      'hasilUkuran': bytes.length,
-      'hasilBagian': bagian.length,
-      'hasilAt': FieldValue.serverTimestamp(),
+    await FirebaseFirestore.instance.runTransaction((tx) async {
+      final snap = await tx.get(_col.doc(p.id));
+      final status = (snap.data() ?? {})['status'] as String? ?? '';
+      if (status != StatusSketsa.dikerjakan) throw StatusBerubah(status);
+      for (var i = 0; i < bagian.length; i++) {
+        tx.set(sub.doc(i.toString().padLeft(3, '0')),
+            {'urutan': i, 'data': bagian[i]});
+      }
+      tx.update(_col.doc(p.id), {
+        'status': StatusSketsa.selesai,
+        'hasilNama': nama,
+        'hasilUkuran': bytes.length,
+        'hasilBagian': bagian.length,
+        'hasilAt': FieldValue.serverTimestamp(),
+      });
     });
-    await batch.commit();
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'sketsa',
@@ -169,6 +225,89 @@ class PesananSketsaService {
       isi: '${p.arsitekNama} sudah mengirim hasil sketsa. '
           'Ketuk untuk melihat dan mengunduh PDF-nya.',
     );
+  }
+
+  /// Arsitek: minta klien melengkapi / memperbaiki data (mis. luas lahan
+  /// tidak masuk akal). Pesanan tetap 'dikerjakan'; tidak memakai jatah revisi.
+  static Future<void> mintaDataDiperbaiki(PesananSketsa p, String alasan) async {
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.dikerjakan],
+      ubah: (d) {
+        if ((d.data() ?? {})['butuhData'] == true) {
+          throw Exception('Permintaan data sudah dikirim, tunggu klien.');
+        }
+        return {
+          'butuhData': true,
+          'alasanMinta': alasan,
+          'mintaDataAt': FieldValue.serverTimestamp(),
+        };
+      },
+    );
+    NotifikasiService.kirim(
+      userId: p.userId,
+      type: 'sketsa',
+      refId: p.id,
+      judul: 'Arsitek butuh data tambahan',
+      isi: '${p.arsitekNama} meminta datamu dilengkapi: $alasan',
+    );
+  }
+
+  /// User: kirim data perbaikan sebagai jawaban atas permintaan arsitek.
+  static Future<void> kirimPerbaikanData(PesananSketsa p, String teks) async {
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.dikerjakan],
+      ubah: (d) {
+        if ((d.data() ?? {})['butuhData'] != true) {
+          throw Exception('Tidak ada permintaan data dari arsitek.');
+        }
+        return {
+          'butuhData': false,
+          'dataPerbaikan': teks,
+          'perbaikanAt': FieldValue.serverTimestamp(),
+        };
+      },
+    );
+    final uid = await _uidArsitek(p.arsitekId);
+    if (uid != null) {
+      NotifikasiService.kirim(
+        userId: uid,
+        type: 'sketsa',
+        refId: p.id,
+        judul: 'Klien sudah melengkapi data',
+        isi: '${p.userNama} mengirim data perbaikan. Lanjutkan pengerjaan sketsa.',
+      );
+    }
+  }
+
+  /// User: ajukan revisi (jatah 1 kali, gratis). Hanya setelah hasil dikirim.
+  static Future<void> mintaRevisi(PesananSketsa p, String alasan) async {
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.selesai],
+      ubah: (d) {
+        if (((d.data() ?? {})['revisiDipakai'] as num? ?? 0) >= 1) {
+          throw Exception('Jatah revisi sudah terpakai.');
+        }
+        return {
+          'status': StatusSketsa.dikerjakan,
+          'revisiDipakai': 1,
+          'alasanRevisi': alasan,
+          'revisiAt': FieldValue.serverTimestamp(),
+        };
+      },
+    );
+    final uid = await _uidArsitek(p.arsitekId);
+    if (uid != null) {
+      NotifikasiService.kirim(
+        userId: uid,
+        type: 'sketsa',
+        refId: p.id,
+        judul: 'Permintaan revisi sketsa',
+        isi: '${p.userNama} meminta revisi: $alasan',
+      );
+    }
   }
 
   /// Ambil isi file hasil (PDF).
@@ -200,11 +339,15 @@ class PesananSketsaService {
   }
 
   static Future<void> setujui(PesananSketsa p) async {
-    await _col.doc(p.id).update({
-      'status': StatusSketsa.dikerjakan,
-      'alasanTolak': FieldValue.delete(),
-      'diverifikasiAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusSketsa.dikerjakan,
+        'alasanTolak': FieldValue.delete(),
+        'diverifikasiAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'sketsa',
@@ -228,13 +371,17 @@ class PesananSketsaService {
 
   static Future<void> mintaUnggahUlang(PesananSketsa p, String alasan) async {
     final pg = await PengaturanService.ambil();
-    await _col.doc(p.id).update({
-      'status': StatusSketsa.menungguPembayaran,
-      'alasanTolak': alasan,
-      'buktiBayar': FieldValue.delete(),
-      'batasBayar':
-          Timestamp.fromDate(DateTime.now().add(Duration(hours: pg.batasBayarJam))),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusSketsa.menungguPembayaran,
+        'alasanTolak': alasan,
+        'buktiBayar': FieldValue.delete(),
+        'batasBayar': Timestamp.fromDate(
+            DateTime.now().add(Duration(hours: pg.batasBayarJam))),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'sketsa',
@@ -245,11 +392,15 @@ class PesananSketsaService {
   }
 
   static Future<void> tolak(PesananSketsa p, String alasan) async {
-    await _col.doc(p.id).update({
-      'status': StatusSketsa.ditolak,
-      'alasanTolak': alasan,
-      'diverifikasiAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusSketsa.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusSketsa.ditolak,
+        'alasanTolak': alasan,
+        'diverifikasiAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'sketsa',

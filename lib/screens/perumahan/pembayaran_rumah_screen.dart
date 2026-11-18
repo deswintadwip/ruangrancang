@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -113,6 +114,7 @@ class _PembayaranRumahScreenState extends State<PembayaranRumahScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,

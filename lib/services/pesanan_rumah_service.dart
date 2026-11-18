@@ -5,6 +5,7 @@ import '../data/perumahan_data.dart';
 import '../models/pesanan_rumah.dart';
 import 'notifikasi_service.dart';
 import 'pengaturan_service.dart';
+import 'status_berubah.dart';
 
 /// Pesanan (booking fee) rumah milik user.
 class PesananRumahService {
@@ -65,11 +66,15 @@ class PesananRumahService {
 
   /// Unggah bukti transfer (base64) -> menunggu verifikasi admin.
   static Future<void> kirimBukti(PesananRumah p, String base64Gambar) async {
-    await _col.doc(p.id).update({
-      'status': StatusPesananRumah.menungguVerifikasi,
-      'buktiBayar': base64Gambar,
-      'buktiBayarAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusPesananRumah.menungguPembayaran],
+      ubah: (_) => {
+        'status': StatusPesananRumah.menungguVerifikasi,
+        'buktiBayar': base64Gambar,
+        'buktiBayarAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'rumah',
@@ -83,12 +88,21 @@ class PesananRumahService {
   /// Batalkan pesanan yang belum dibayar.
   static Future<void> batalkan(PesananRumah p,
       {String oleh = 'user', String alasan = 'Dibatalkan sebelum pembayaran'}) {
-    return _col.doc(p.id).update({
-      'status': StatusPesananRumah.dibatalkan,
-      'dibatalkanOleh': oleh,
-      'alasanBatal': alasan,
-      'dibatalkanAt': FieldValue.serverTimestamp(),
-    });
+    return ubahBilaStatus(
+      _col.doc(p.id),
+      dari: oleh == 'sistem'
+          ? [StatusPesananRumah.menungguPembayaran]
+          : [
+              StatusPesananRumah.menungguPembayaran,
+              StatusPesananRumah.menungguVerifikasi,
+            ],
+      ubah: (_) => {
+        'status': StatusPesananRumah.dibatalkan,
+        'dibatalkanOleh': oleh,
+        'alasanBatal': alasan,
+        'dibatalkanAt': FieldValue.serverTimestamp(),
+      },
+    );
   }
 
   /// Pesanan yang lewat batas bayar dibatalkan otomatis (tanpa Cloud

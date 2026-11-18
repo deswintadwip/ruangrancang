@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -54,7 +55,11 @@ class _ProfilTabState extends State<ProfilTab> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
             children: [
-              Text('Profil', style: AppTheme.heading(26)),
+              HeaderFoto(
+                  bulat: true,
+                  child: SizedBox(
+                      width: double.infinity,
+                      child: Text('Profil', style: AppTheme.heading(30)))),
               const SizedBox(height: 16),
               _kartuIdentitas(p),
               const SizedBox(height: 22),

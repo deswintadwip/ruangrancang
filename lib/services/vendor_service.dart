@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../config/status.dart';
 import '../models/permintaan_vendor.dart';
 import 'notifikasi_service.dart';
+import 'status_berubah.dart';
 
 /// Permintaan vendor milik user. Daftar vendor sendiri masih statis
 /// (lihat data/vendor_data.dart).
@@ -71,9 +72,13 @@ class VendorService {
 
   /// User menutup permintaan setelah vendor menghubungi (dihubungi -> selesai).
   static Future<void> tandaiSelesai(PermintaanVendor p) {
-    return _col.doc(p.id).update({
-      'status': StatusPermintaanVendor.selesai,
-      'selesaiAt': FieldValue.serverTimestamp(),
-    });
+    return ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusPermintaanVendor.dihubungi],
+      ubah: (_) => {
+        'status': StatusPermintaanVendor.selesai,
+        'selesaiAt': FieldValue.serverTimestamp(),
+      },
+    );
   }
 }

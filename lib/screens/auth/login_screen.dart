@@ -153,11 +153,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Row(
       children: [
-        const Icon(Icons.home_outlined, color: Colors.white, size: 30),
+        const Icon(Icons.home_outlined, color: Colors.white, size: 42),
         const SizedBox(width: 8),
         Text(
           'RuangRancang',
-          style: AppTheme.heading(22).copyWith(
+          style: AppTheme.heading(31).copyWith(
             color: Colors.white,
             shadows: AppTheme.textShadow,
           ),

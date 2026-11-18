@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../config/status.dart';
 import '../models/pesanan_rumah.dart';
 import 'notifikasi_service.dart';
+import 'status_berubah.dart';
 
 /// Aksi admin untuk pesanan rumah (verifikasi booking fee).
 class AdminPesananRumahService {
@@ -20,11 +21,15 @@ class AdminPesananRumahService {
       _col.doc(id).snapshots();
 
   static Future<void> setujui(PesananRumah p) async {
-    await _col.doc(p.id).update({
-      'status': StatusPesananRumah.disetujui,
-      'alasanTolak': FieldValue.delete(),
-      'diverifikasiAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusPesananRumah.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusPesananRumah.disetujui,
+        'alasanTolak': FieldValue.delete(),
+        'diverifikasiAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'rumah',
@@ -36,11 +41,15 @@ class AdminPesananRumahService {
   }
 
   static Future<void> tolak(PesananRumah p, String alasan) async {
-    await _col.doc(p.id).update({
-      'status': StatusPesananRumah.ditolak,
-      'alasanTolak': alasan,
-      'diverifikasiAt': FieldValue.serverTimestamp(),
-    });
+    await ubahBilaStatus(
+      _col.doc(p.id),
+      dari: [StatusPesananRumah.menungguVerifikasi],
+      ubah: (_) => {
+        'status': StatusPesananRumah.ditolak,
+        'alasanTolak': alasan,
+        'diverifikasiAt': FieldValue.serverTimestamp(),
+      },
+    );
     NotifikasiService.kirim(
       userId: p.userId,
       type: 'rumah',

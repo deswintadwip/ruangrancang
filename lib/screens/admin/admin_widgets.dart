@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/header_foto.dart';
 import 'admin_ringkasan.dart'; // AdminColors
 
 /// Warna tambahan khusus tampilan admin
@@ -37,29 +38,8 @@ class AdminPageHeader extends StatelessWidget {
       height: 150,
       child: Stack(
         children: [
-          // Foto rumah di kanan, memudar ke kiri
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: 200,
-            child: ShaderMask(
-              shaderCallback: (rect) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.transparent, Colors.black],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: Opacity(
-                opacity: 0.45,
-                child: Image.asset(
-                  'lib/images/houselogin.jpg',
-                  fit: BoxFit.cover,
-                  cacheWidth: 500,
-                ),
-              ),
-            ),
-          ),
+          // Foto rumah transparan dari ujung ke ujung
+          const Positioned.fill(child: HeaderFotoLatar()),
 
           // Ikon + tulisan
           Padding(
@@ -71,14 +51,14 @@ class AdminPageHeader extends StatelessWidget {
                     icon: const Icon(Icons.arrow_back),
                     onPressed: () => Navigator.pop(context),
                   ),
-                Icon(icon, size: 46, color: AppColors.primary),
+                Icon(icon, size: 56, color: AppColors.primary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(judul, style: AppTheme.heading(22)),
+                      Text(judul, style: AppTheme.heading(27)),
                       const SizedBox(height: 4),
                       Text(
                         subjudul,

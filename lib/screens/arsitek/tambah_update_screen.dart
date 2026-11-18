@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import '../../config/tahap.dart';
 import '../../models/konsultasi.dart';
@@ -66,6 +67,7 @@ class _TambahUpdateScreenState extends State<TambahUpdateScreen> {
     final minTahap = k.tahapSaatIni;
     return Scaffold(
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         title: const Text('Tambah Update'),
         backgroundColor: AppColors.background,
       ),

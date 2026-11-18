@@ -1,0 +1,444 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Fungsi bantu =====
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Cek role user yang sedang login: 'user', 'arsitek', atau 'admin'
+    function hasRole(role) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    function isAdmin()   { return hasRole('admin'); }
+    function isArsitek() { return hasRole('arsitek'); }
+
+    // Apakah arsitekId ini ditugaskan ke arsitek yang login?
+    // arsitekId boleh berisi UID akun, atau 'profilId' (mis. "arsitek_01")
+    // yang tersimpan di dokumen arsitek/{uid}.
+    function ketugaskan(idArsitek) {
+      return isArsitek() && (
+        idArsitek == request.auth.uid
+        || (exists(/databases/$(database)/documents/arsitek/$(request.auth.uid))
+            && get(/databases/$(database)/documents/arsitek/$(request.auth.uid)).data.get('profilId', '') == idArsitek));
+    }
+
+    // Daftar field yang berubah dalam satu update
+    function changedFields() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Dokumen konsultasi induk (dipakai subkoleksi & ulasan)
+    function konsultasiDoc(id) {
+      return get(/databases/$(database)/documents/konsultasi/$(id)).data;
+    }
+
+    // Nilai dari pengaturan/aplikasi (diatur admin), atau nilai bawaan
+    function peng(kunci, bawaan) {
+      return exists(/databases/$(database)/documents/pengaturan/aplikasi)
+        ? get(/databases/$(database)/documents/pengaturan/aplikasi).data.get(kunci, bawaan)
+        : bawaan;
+    }
+
+    // Batas bayar harus masuk akal menurut JAM SERVER:
+    // paling lama batasBayarJam + 1 jam (toleransi jam HP) dari sekarang.
+    function batasWajar(b) {
+      return b is timestamp
+        && b > request.time - duration.value(1, 'h')
+        && b <= request.time + duration.value(int(peng('batasBayarJam', 24)) + 1, 'h');
+    }
+
+    // Pembatalan otomatis ('sistem') hanya sah kalau batas bayar sudah lewat
+    // menurut jam server.
+    function batalSistemSah(lama) {
+      return request.resource.data.dibatalkanOleh != 'sistem'
+        || (lama == 'menunggu_pembayaran'
+            && request.time >= resource.data.get('batasBayar', request.time));
+    }
+
+    // Tarif sketsa per luas lahan (m2). Samakan dengan config/tarif_sketsa.dart.
+    function hargaSketsa(l) {
+      return l <= 50 ? 300000
+        : l <= 100 ? 450000
+        : l <= 200 ? 650000
+        : l <= 500 ? 850000
+        : l <= 1000 ? 1500000
+        : 2500000;
+    }
+
+    // ===== users: data akun =====
+    match /users/{uid} {
+      // Hanya pemilik dan admin. (Arsitek tidak boleh baca akun orang lain.)
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Daftar: selalu jadi 'user' dulu. Arsitek & admin diangkat oleh admin
+      allow create: if isOwner(uid)
+        && request.resource.data.role == 'user'
+        && request.resource.data.isActive == true;
+
+      // Admin bebas. Pemilik tidak boleh menyentuh field penting.
+      allow update: if isAdmin()
+        || (isOwner(uid)
+            && !changedFields().hasAny(['role', 'isActive', 'phoneVerified', 'createdAt'])
+            && (!changedFields().hasAny(['promoKonsultasiTerpakai'])
+                || request.resource.data.promoKonsultasiTerpakai == true)
+            && (!changedFields().hasAny(['emailVerified'])
+                || request.auth.token.email_verified == true));
+
+      allow delete: if false;
+    }
+
+    // ===== arsitek: profil publik (ID dokumen = UID akun arsitek) =====
+    match /arsitek/{uid} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isOwner(uid) && isArsitek()
+            && !changedFields().hasAny(['isActive', 'rating']));
+    }
+
+    // ===== pengaturan: dibaca semua, diubah admin =====
+    match /pengaturan/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ===== portofolio: proyek di Beranda, diubah admin =====
+    match /portofolio/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ===== konsultasi =====
+    match /konsultasi/{kid} {
+
+      function milikUser() {
+        return isSignedIn() && resource.data.userId == request.auth.uid;
+      }
+      function ditugaskanKeSaya() {
+        return ketugaskan(resource.data.arsitekId);
+      }
+
+      allow read: if milikUser() || ditugaskanKeSaya() || isAdmin();
+
+      // Harga HARUS sama dengan harga di pengaturan (tidak bisa diakali).
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.harga is int
+        && (
+          // booking berbayar: harga harus sama dengan pengaturan
+          (request.resource.data.status == 'menunggu_pembayaran'
+            && request.resource.data.harga == peng('hargaKonsultasi', 200000)
+            && batasWajar(request.resource.data.get('batasBayar', null)))
+          ||
+          // promo konsultasi pertama gratis (sekali per akun)
+          (request.resource.data.status == 'dikonfirmasi'
+            && request.resource.data.harga == 0
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('promoKonsultasiTerpakai', false) == false
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('promoKonsultasiTerpakai', false) == true)
+        );
+
+      allow update: if isAdmin()
+        || userBolehUbah()
+        || arsitekBolehUbah();
+
+      allow delete: if false;
+
+      // Refund masuk akal: persen 0/50/100, nominal tidak melebihi harga x persen,
+      // belum bayar = 0, status refund sesuai nominal.
+      function refundWajar(lama) {
+        let d = request.resource.data;
+        return d.refundPersen in [0, 50, 100]
+          && d.refundNominal is int
+          && d.refundNominal >= 0
+          && d.refundNominal * 100 <= resource.data.harga * d.refundPersen
+          && (lama != 'menunggu_pembayaran' || d.refundPersen == 0)
+          && d.refundStatus == (d.refundNominal > 0 ? 'diproses' : 'tidak_ada');
+      }
+
+      function userBolehUbah() {
+        let f = changedFields();
+        let lama = resource.data.status;
+        let baru = request.resource.data.status;
+        return milikUser() && (
+          // 1) unggah bukti bayar: hanya dari menunggu_pembayaran & sebelum batas (jam server)
+          (lama == 'menunggu_pembayaran' && baru == 'menunggu_verifikasi'
+            && request.time <= resource.data.get('batasBayar', request.time)
+            && f.hasOnly(['status', 'buktiBayarUrl', 'buktiBayar', 'buktiBayarAt']))
+          ||
+          // 2) batalkan
+          (lama in ['menunggu_pembayaran', 'menunggu_verifikasi', 'dikonfirmasi']
+            && baru == 'dibatalkan'
+            && request.resource.data.dibatalkanOleh in ['user', 'sistem']
+            && batalSistemSah(lama)
+            && refundWajar(lama)
+            && f.hasOnly(['status', 'dibatalkanOleh', 'dibatalkanAt', 'alasanBatal',
+                          'refundPersen', 'refundNominal', 'refundStatus']))
+          ||
+          // 3) jadwal ulang (status tetap dikonfirmasi)
+          (lama == 'dikonfirmasi' && baru == 'dikonfirmasi'
+            && f.hasOnly(['tanggal', 'jam', 'jamSelesai', 'jadwalUlang']))
+          ||
+          // 4) isi rekening tujuan refund (hanya saat refund sedang diproses)
+          (lama == 'dibatalkan' && baru == 'dibatalkan'
+            && resource.data.get('refundStatus', '') == 'diproses'
+            && f.hasOnly(['refundBank', 'refundRekening', 'refundAtasNama', 'refundDiisiAt'])
+            && request.resource.data.refundBank is string
+            && request.resource.data.refundBank.size() >= 2
+            && request.resource.data.refundBank.size() <= 40
+            && request.resource.data.refundAtasNama is string
+            && request.resource.data.refundAtasNama.size() >= 3
+            && request.resource.data.refundAtasNama.size() <= 60
+            && request.resource.data.refundRekening is string
+            && request.resource.data.refundRekening.matches('^[0-9]{6,20}$'))
+        );
+      }
+
+      function arsitekBolehUbah() {
+        let f = changedFields();
+        let lama = resource.data.status;
+        let baru = request.resource.data.status;
+        return ditugaskanKeSaya() && (
+          // atur link Meet, tahap, progres (status tidak berubah)
+          (baru == lama
+            && f.hasOnly(['meetLink', 'tahap', 'progress', 'updatedAt']))
+          ||
+          // tandai sesi selesai
+          (lama == 'dikonfirmasi' && baru == 'selesai'
+            && f.hasOnly(['status', 'selesaiAt', 'tahap', 'progress', 'updatedAt']))
+          ||
+          // arsitek membatalkan (refund 100%)
+          (lama == 'dikonfirmasi' && baru == 'dibatalkan'
+            && request.resource.data.dibatalkanOleh == 'arsitek'
+            && request.resource.data.refundPersen == 100
+            && refundWajar(lama)
+            && f.hasOnly(['status', 'dibatalkanOleh', 'dibatalkanAt', 'alasanBatal',
+                          'refundPersen', 'refundNominal', 'refundStatus']))
+        );
+      }
+
+      // Update progres kerja: ditulis arsitek, dibaca user & arsitek terkait
+      match /update/{uid} {
+        allow read: if isSignedIn() && (
+          konsultasiDoc(kid).userId == request.auth.uid
+          || ketugaskan(konsultasiDoc(kid).arsitekId)
+          || isAdmin());
+        allow create, update: if isAdmin()
+          || ketugaskan(konsultasiDoc(kid).arsitekId);
+        allow delete: if false;
+      }
+
+      // Permintaan revisi: dibuat user, dibaca user & arsitek terkait
+      match /revisi/{rid} {
+        allow read: if isSignedIn() && (
+          konsultasiDoc(kid).userId == request.auth.uid
+          || ketugaskan(konsultasiDoc(kid).arsitekId)
+          || isAdmin());
+        allow create: if isSignedIn()
+          && konsultasiDoc(kid).userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    // ===== jadwal: kunci slot jam arsitek =====
+    match /jadwal/{slotId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if false;
+      allow delete: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    // ===== ulasan: ID dokumen = ID konsultasi (maks. 1 ulasan per konsultasi) =====
+    match /ulasan/{kid} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && exists(/databases/$(database)/documents/konsultasi/$(kid))
+        && konsultasiDoc(kid).userId == request.auth.uid
+        && konsultasiDoc(kid).status == 'selesai'
+        && request.resource.data.arsitekId == konsultasiDoc(kid).arsitekId
+        && request.resource.data.bintang is number
+        && request.resource.data.bintang >= 1
+        && request.resource.data.bintang <= 5;
+
+      allow update: if ketugaskan(resource.data.arsitekId)
+        && changedFields().hasOnly(['balasan', 'balasanAt']);
+
+      allow delete: if isAdmin();
+    }
+
+    // ===== notifikasi =====
+    // Dibaca pemilik. Boleh dibuat untuk diri sendiri, atau oleh admin/arsitek
+    // untuk klien. Pemilik hanya boleh menandai sudah dibaca.
+    match /notifikasi/{nid} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.resource.data.keys().hasOnly(['userId', 'type', 'refId', 'judul', 'isi', 'isRead', 'createdAt'])
+        && request.resource.data.userId is string
+        && request.resource.data.isRead == false
+        && (request.resource.data.userId == request.auth.uid || isAdmin() || isArsitek());
+
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && changedFields().hasOnly(['isRead']);
+
+      allow delete: if false;
+    }
+
+    // ===== pesanan_rumah: booking fee rumah =====
+    match /pesanan_rumah/{id} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'menunggu_pembayaran'
+        && request.resource.data.bookingFee is int
+        && request.resource.data.bookingFee == peng('bookingFeeRumah', 10000000)
+        && batasWajar(request.resource.data.get('batasBayar', null));
+
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid && (
+          // kirim bukti: hanya dari menunggu_pembayaran, sebelum batas (jam server)
+          (resource.data.status == 'menunggu_pembayaran'
+            && request.resource.data.status == 'menunggu_verifikasi'
+            && request.time <= resource.data.get('batasBayar', request.time)
+            && changedFields().hasOnly(['status', 'buktiBayar', 'buktiBayarAt']))
+          ||
+          // batalkan: hanya sebelum diverifikasi
+          (resource.data.status in ['menunggu_pembayaran', 'menunggu_verifikasi']
+            && request.resource.data.status == 'dibatalkan'
+            && request.resource.data.dibatalkanOleh in ['user', 'sistem']
+            && batalSistemSah(resource.data.status)
+            && changedFields().hasOnly(['status', 'dibatalkanOleh', 'alasanBatal', 'dibatalkanAt']))
+        ));
+
+      allow delete: if false;
+    }
+
+    // ===== permintaan_vendor =====
+    match /permintaan_vendor/{id} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'baru';
+
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid
+            && resource.data.status == 'dihubungi'
+            && request.resource.data.status == 'selesai'
+            && changedFields().hasOnly(['status', 'selesaiAt']));
+
+      allow delete: if false;
+    }
+
+    // ===== pesanan_sketsa: sketsa desain =====
+    match /pesanan_sketsa/{id} {
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'menunggu_pembayaran'
+        && request.resource.data.luasLahan is int
+        && request.resource.data.luasLahan > 0
+        && request.resource.data.harga is int
+        && request.resource.data.harga == hargaSketsa(request.resource.data.luasLahan)
+        && batasWajar(request.resource.data.get('batasBayar', null));
+
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid
+        || ketugaskan(resource.data.arsitekId)
+        || isAdmin()
+      );
+
+      allow update: if isAdmin()
+        // ---- USER ----
+        || (isSignedIn() && resource.data.userId == request.auth.uid && (
+              // kirim bukti (hanya dari menunggu_pembayaran, sebelum batas jam server)
+              (resource.data.status == 'menunggu_pembayaran'
+                && request.resource.data.status == 'menunggu_verifikasi'
+                && request.time <= resource.data.get('batasBayar', request.time)
+                && changedFields().hasOnly(['status', 'buktiBayar', 'buktiBayarAt']))
+              ||
+              // batalkan (hanya sebelum pembayaran diverifikasi)
+              (resource.data.status in ['menunggu_pembayaran', 'menunggu_verifikasi']
+                && request.resource.data.status == 'dibatalkan'
+                && request.resource.data.dibatalkanOleh in ['user', 'sistem']
+                && batalSistemSah(resource.data.status)
+                && changedFields().hasOnly(['status', 'alasanBatal', 'dibatalkanOleh', 'dibatalkanAt']))
+              ||
+              // jawab permintaan data dari arsitek
+              (resource.data.status == 'dikerjakan'
+                && request.resource.data.status == 'dikerjakan'
+                && resource.data.get('butuhData', false) == true
+                && request.resource.data.butuhData == false
+                && request.resource.data.dataPerbaikan is string
+                && request.resource.data.dataPerbaikan.size() >= 3
+                && request.resource.data.dataPerbaikan.size() <= 1000
+                && changedFields().hasOnly(['butuhData', 'dataPerbaikan', 'perbaikanAt']))
+              ||
+              // ajukan revisi (jatah 1 kali, hanya setelah selesai)
+              (resource.data.status == 'selesai'
+                && request.resource.data.status == 'dikerjakan'
+                && resource.data.get('revisiDipakai', 0) == 0
+                && request.resource.data.revisiDipakai == 1
+                && request.resource.data.alasanRevisi is string
+                && request.resource.data.alasanRevisi.size() >= 3
+                && request.resource.data.alasanRevisi.size() <= 1000
+                && changedFields().hasOnly(['status', 'revisiDipakai', 'alasanRevisi', 'revisiAt']))
+           ))
+        // ---- ARSITEK ----
+        || (ketugaskan(resource.data.arsitekId) && (
+              // minta klien memperbaiki data (status tetap dikerjakan)
+              (resource.data.status == 'dikerjakan'
+                && request.resource.data.status == 'dikerjakan'
+                && resource.data.get('butuhData', false) == false
+                && request.resource.data.butuhData == true
+                && request.resource.data.alasanMinta is string
+                && request.resource.data.alasanMinta.size() >= 3
+                && request.resource.data.alasanMinta.size() <= 1000
+                && changedFields().hasOnly(['butuhData', 'alasanMinta', 'mintaDataAt']))
+              ||
+              // kirim hasil: HANYA dikerjakan -> selesai
+              (resource.data.status == 'dikerjakan'
+                && request.resource.data.status == 'selesai'
+                && request.resource.data.hasilBagian is int
+                && request.resource.data.hasilBagian > 0
+                && request.resource.data.hasilBagian <= 8
+                && changedFields().hasOnly(['status', 'hasilNama', 'hasilUkuran', 'hasilBagian', 'hasilAt']))
+           ));
+
+      allow delete: if false;
+
+      match /hasil/{bagian} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/pesanan_sketsa/$(id)).data.userId == request.auth.uid
+          || ketugaskan(get(/databases/$(database)/documents/pesanan_sketsa/$(id)).data.arsitekId)
+          || isAdmin()
+        );
+        // Hasil hanya boleh ditulis selagi pesanan 'dikerjakan' (termasuk saat revisi)
+        allow create, update: if isAdmin()
+          || (ketugaskan(get(/databases/$(database)/documents/pesanan_sketsa/$(id)).data.arsitekId)
+              && get(/databases/$(database)/documents/pesanan_sketsa/$(id)).data.status == 'dikerjakan'
+              && request.resource.data.keys().hasOnly(['urutan', 'data'])
+              && request.resource.data.data is string
+              && request.resource.data.data.size() <= 600000);
+        allow delete: if false;
+      }
+    }
+
+    // Koleksi lain TIDAK diizinkan (default tertutup).
+  }
+}

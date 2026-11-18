@@ -4,6 +4,7 @@ import '../../data/arsitek_data.dart';
 import '../../services/admin_arsitek_service.dart';
 import '../../services/auth_service.dart';
 import '../../theme/app_theme.dart';
+import 'admin_arsitek_detail_page.dart';
 import 'admin_ringkasan.dart';
 import 'admin_util.dart';
 import 'admin_widgets.dart';
@@ -61,17 +62,17 @@ class _AdminArsitekPageState extends State<AdminArsitekPage> {
                 child: snap.hasError
                     ? const Center(child: Text('Gagal memuat daftar arsitek.'))
                     : !snap.hasData
-                        ? const Center(child: CircularProgressIndicator())
-                        : list.isEmpty
-                            ? const Center(
-                                child: Text('Belum ada akun arsitek.',
-                                    style: TextStyle(color: AppColors.textMuted)))
-                            : ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                                itemCount: list.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                itemBuilder: (_, i) => _Baris(a: list[i]),
-                              ),
+                    ? const Center(child: CircularProgressIndicator())
+                    : list.isEmpty
+                    ? const Center(
+                    child: Text('Belum ada akun arsitek.',
+                        style: TextStyle(color: AppColors.textMuted)))
+                    : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, i) => _Baris(a: list[i]),
+                ),
               ),
             ],
           ),
@@ -87,51 +88,63 @@ class _Baris extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AdminColors.line.withValues(alpha: 0.7)),
-      ),
-      child: Row(children: [
-        Container(
-          width: 42,
-          height: 42,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-              color: AppColors.primary, borderRadius: BorderRadius.circular(12)),
-          child: Text(a.nama.isEmpty ? '?' : a.nama[0].toUpperCase(),
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => AdminArsitekDetailPage(a: a)),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(a.nama,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            Text(
-                '${a.profilId.isEmpty ? 'belum terhubung' : a.profilId}'
-                '${a.spesialisasi.isEmpty ? '' : ' · ${a.spesialisasi}'}',
-                style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AdminColors.line.withValues(alpha: 0.7)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 42,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                  color: AppColors.primary, borderRadius: BorderRadius.circular(12)),
+              child: Text(a.nama.isEmpty ? '?' : a.nama[0].toUpperCase(),
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(a.nama,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(
+                    '${a.profilId.isEmpty ? 'belum terhubung' : a.profilId}'
+                        '${a.spesialisasi.isEmpty ? '' : ' · ${a.spesialisasi}'}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+              ]),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: a.aktif ? AppColors.sageMuda : const Color(0xFFF7E3DD),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(a.aktif ? 'Aktif' : 'Nonaktif',
+                  style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: a.aktif ? AppColors.primary : const Color(0xFF7A3F32))),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
           ]),
         ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: a.aktif ? AppColors.sageMuda : const Color(0xFFF7E3DD),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(a.aktif ? 'Aktif' : 'Nonaktif',
-              style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: a.aktif ? AppColors.primary : const Color(0xFF7A3F32))),
-        ),
-      ]),
+      ),
     );
   }
 }
@@ -272,12 +285,12 @@ class _FormArsitekState extends State<_FormArsitek> {
               onChanged: _sibuk
                   ? null
                   : (a) {
-                      if (a == null) return;
-                      setState(() {
-                        _profil = a;
-                        _isiDari(a);
-                      });
-                    },
+                if (a == null) return;
+                setState(() {
+                  _profil = a;
+                  _isiDari(a);
+                });
+              },
             ),
             const SizedBox(height: 12),
             _kolom(_nama, 'Nama'),
@@ -300,11 +313,11 @@ class _FormArsitekState extends State<_FormArsitek> {
               ),
               child: _sibuk
                   ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
                   : const Text('Buat Akun',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ],
         ),

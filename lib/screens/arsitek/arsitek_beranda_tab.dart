@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/status.dart';
@@ -123,6 +124,10 @@ class _ArsitekBerandaTabState extends State<ArsitekBerandaTab> {
   }
 
   Widget _header() {
+    return HeaderFoto(bulat: true, child: _headerIsi());
+  }
+
+  Widget _headerIsi() {
     return Row(children: [
       CircleAvatar(
         radius: 22,

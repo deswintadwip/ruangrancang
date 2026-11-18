@@ -51,11 +51,11 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.home_outlined, color: Colors.white, size: 64),
+            const Icon(Icons.home_outlined, color: Colors.white, size: 84),
             const SizedBox(height: 12),
             Text(
               'RuangRancang',
-              style: AppTheme.heading(28).copyWith(color: Colors.white),
+              style: AppTheme.heading(38).copyWith(color: Colors.white),
             ),
             const SizedBox(height: 4),
             const Text(

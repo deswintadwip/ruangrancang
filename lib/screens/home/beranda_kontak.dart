@@ -145,10 +145,10 @@ class BerandaFooter extends StatelessWidget {
           // Logo + tagline
           Row(
             children: [
-              const Icon(Icons.home_outlined, color: Colors.white, size: 26),
+              const Icon(Icons.home_outlined, color: Colors.white, size: 38),
               const SizedBox(width: 8),
               Text('RuangRancang',
-                  style: AppTheme.heading(20).copyWith(color: Colors.white)),
+                  style: AppTheme.heading(27).copyWith(color: Colors.white)),
             ],
           ),
           const SizedBox(height: 6),

@@ -1,3 +1,4 @@
+import '../../widgets/header_foto.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -62,6 +63,7 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
   final List<Uint8List> _lampiran = [];
   String _nama = '';
   bool _mengirim = false;
+  bool _setuju = false;
 
   @override
   void initState() {
@@ -112,6 +114,7 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
   Future<void> _kirim() async {
     if (_luasAngka <= 0) return _pesan('Isi luas lahan dulu (angka, dalam m²).');
     if (_kota.text.trim().isEmpty) return _pesan('Isi lokasi lahan (kota atau daerah).');
+    if (!_setuju) return _pesan('Centang persetujuan ketentuan sketsa dulu.');
     setState(() => _mengirim = true);
     try {
       final id = await PesananSketsaService.buat(
@@ -142,6 +145,7 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
           'referensi': _referensi.text.trim(),
           'catatan': _catatan.text.trim(),
           'lampiran': _lampiran.map(base64Encode).toList(),
+          'syaratDisetujui': true,
         },
       );
       if (!mounted) return;
@@ -151,7 +155,10 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
       debugPrint('SKETSA BUAT ERROR: $e');
       if (!mounted) return;
       setState(() => _mengirim = false);
-      _pesan('Gagal membuat pesanan. Coba lagi.');
+      final teks = e.toString();
+      _pesan(teks.startsWith('Exception: kamu') || teks.contains('masih punya pesanan')
+          ? teks.replaceFirst('Exception: ', '')
+          : 'Gagal membuat pesanan. Coba lagi.');
     }
   }
 
@@ -162,6 +169,7 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        flexibleSpace: const HeaderFotoLatar(),
         backgroundColor: AppColors.background,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -432,6 +440,32 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
     ]);
   }
 
+  void _lihatKetentuan() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ketentuan Sketsa Desain'),
+        content: const SingleChildScrollView(
+          child: Text(
+              '1. Hasil berupa sketsa dalam file PDF, dikirim lewat aplikasi.\n\n'
+              '2. Harga mengikuti luas lahan dan dibayar di muka.\n\n'
+              '3. Pengerjaan dimulai setelah pembayaran diverifikasi admin. '
+              'Target selesai 3 hari kerja, dengan batas toleransi sampai hari kerja ke-5.\n\n'
+              '4. Tidak ada refund setelah pesanan dikerjakan.\n\n'
+              '5. Kamu mendapat 1 kali revisi gratis, hanya untuk perubahan di dalam data yang sudah kamu isi. '
+              'Permintaan baru di luar data awal dianggap pesanan baru.\n\n'
+              '6. Jika data yang kamu isi tidak masuk akal atau kurang, arsitek dapat meminta data diperbaiki. '
+              'Permintaan ini tidak memakai jatah revisi, dan pengerjaan dilanjutkan setelah datamu dilengkapi.\n\n'
+              '7. Jika arsitek terlambat melewati batas, kamu mendapat voucher untuk pesanan berikutnya sebagai kompensasi.',
+              style: TextStyle(fontSize: 13, height: 1.5)),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Tutup')),
+        ],
+      ),
+    );
+  }
+
   Widget _barBawah() {
     final ada = _luasAngka > 0;
     return Container(
@@ -453,7 +487,29 @@ class _SketsaFormScreenState extends State<SketsaFormScreen> {
           Text(formatRupiah(ada ? _harga : TarifSketsa.hargaMulai),
               style: AppTheme.heading(19).copyWith(color: AppColors.primary)),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        Row(children: [
+          Checkbox(
+            value: _setuju,
+            activeColor: AppColors.primary,
+            onChanged: (v) => setState(() => _setuju = v ?? false),
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTap: _lihatKetentuan,
+              child: const Text.rich(TextSpan(
+                  style: TextStyle(fontSize: 12, color: AppColors.textDark),
+                  children: [
+                    TextSpan(text: 'Saya setuju dengan '),
+                    TextSpan(
+                        text: 'ketentuan sketsa',
+                        style: TextStyle(
+                            color: AppColors.primary,
+                            decoration: TextDecoration.underline)),
+                  ])),
+            ),
+          ),
+        ]),
         FilledButton(
           onPressed: _mengirim ? null : _kirim,
           style: FilledButton.styleFrom(
