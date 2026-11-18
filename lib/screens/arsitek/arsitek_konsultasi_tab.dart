@@ -54,19 +54,24 @@ class _ArsitekKonsultasiTabState extends State<ArsitekKonsultasiTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          HeaderFoto(child: Padding(
+          Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Konsultasi Saya', style: AppTheme.heading(24)),
+                HeaderFoto(
+                    bulat: true,
+                    child: SizedBox(
+                        width: double.infinity,
+                        child: Text('Konsultasi Saya',
+                            style: AppTheme.heading(28)))),
                 const SizedBox(height: 2),
                 const Text('Pantau dan perbarui progres tiap klien',
                     style:
                     TextStyle(fontSize: 12.5, color: AppColors.textMuted)),
               ],
             ),
-          )),
+          ),
           const SizedBox(height: 14),
           SizedBox(
             height: 38,
@@ -235,65 +240,50 @@ class _ArsitekKonsultasiTabState extends State<ArsitekKonsultasiTab> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: w.$2),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Expanded(
-                      child: Text(k.userNama,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: pilWarna,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(pil,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
-                    ),
-                  ]),
-                  if (detail.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(detail,
-                        style: const TextStyle(
-                            fontSize: 12, color: Color(0xFF4A4639))),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    const Icon(Icons.calendar_today_outlined,
-                        size: 14, color: Color(0xFF4A4639)),
-                    const SizedBox(width: 6),
-                    Text(
-                        '${tanggalPendek(k.tanggal)} · ${k.jam} – ${k.jamSelesai}',
-                        style: const TextStyle(fontSize: 12.5)),
-                  ]),
-                  const SizedBox(height: 4),
-                  Text(bawah,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF4A4639))),
-                ],
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Text(k.userNama,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w700)),
               ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(color: w.$3, shape: BoxShape.circle),
-              child: const Icon(Icons.arrow_forward,
-                  size: 18, color: Colors.white),
-            ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: pilWarna,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(pil,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+              ),
+            ]),
+            if (detail.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(detail,
+                  style:
+                  const TextStyle(fontSize: 12, color: Color(0xFF4A4639))),
+            ],
+            const SizedBox(height: 8),
+            Row(children: [
+              const Icon(Icons.calendar_today_outlined,
+                  size: 14, color: Color(0xFF4A4639)),
+              const SizedBox(width: 6),
+              Text(
+                  '${tanggalPendek(k.tanggal)} · ${k.jam} – ${k.jamSelesai}',
+                  style: const TextStyle(fontSize: 12.5)),
+            ]),
+            const SizedBox(height: 4),
+            Text(bawah,
+                style: const TextStyle(fontSize: 12, color: Color(0xFF4A4639))),
           ],
         ),
       ),

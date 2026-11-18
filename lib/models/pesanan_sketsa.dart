@@ -47,6 +47,8 @@ class PesananSketsa {
   final String bukti; // base64 bukti transfer
   final DateTime? batasBayar;
   final DateTime? createdAt;
+  final DateTime? diverifikasiAt; // admin memverifikasi bayar -> mulai dikerjakan
+  final int tambahanHariKerja; // tambahan waktu dari admin (hari kerja)
 
   // Hasil
   final String hasilNama;
@@ -96,6 +98,8 @@ class PesananSketsa {
     this.bukti = '',
     this.batasBayar,
     this.createdAt,
+    this.diverifikasiAt,
+    this.tambahanHariKerja = 0,
     this.hasilNama = '',
     this.hasilUkuran = 0,
     this.hasilBagian = 0,
@@ -150,6 +154,8 @@ class PesananSketsa {
       bukti: s('buktiBayar'),
       batasBayar: _w(m['batasBayar']),
       createdAt: _w(m['createdAt']),
+      diverifikasiAt: _w(m['diverifikasiAt']),
+      tambahanHariKerja: n('tambahanHariKerja'),
       hasilNama: s('hasilNama'),
       hasilUkuran: n('hasilUkuran'),
       hasilBagian: n('hasilBagian'),
